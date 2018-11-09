@@ -1,0 +1,143 @@
+# The Workflow/Pipeline
+
+## Step 1: Move all the fastq files into Raw_Data directory.
+
+### 1. Make a directory named Raw_Data
+mkdir /fs/project/PAS0471/osu8900/Mi-SeqRun2/Raw_Data
+# Assign download folder path to variable 'fastq_download_dir'-asigning a name to my long path to reduce the name length.
+fastq_download_dir=/fs/project/PAS0471/osu8900/Mi-SeqRun2/180206_AnneDorrance_KrystelNavarro-amplicons-64594557
+# change the directory to 'fastq_download_dir'
+cd $fastq_download_dir
+#move fastq files inside 'fastq_download_dir' to 'Raw_Data' folder
+for i in */*/*;do echo  $i ../Raw_Data/;done
+for i in */*/*;do mv  $i ../Raw_Data/;done
+
+#Samples from the Run were relabeled with original sample labels
+for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R1_* ../Raw_Data/${samplename}_R1.fastq.gz;done
+
+for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R2_* ../Raw_Data/${samplename}_R2.fastq.gz;done
+
+#Run stats. Use stats scripts
+
+
+# Step 2: Remove Illumina barcodes from foward reads and reverse reads
+# We are using 'illumina_adapter_rm.sh' script which is in /fs/project/PAS0471/osu8900/Software/Scripts
+# Edit the paths in 'illumina_adapter_rm.sh', i.e working_dir, raw_data, ADAPTSEQ
+# working_dir=/fs/project/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun/Illumina_Adapter_Removed
+# raw_data=/fs/project/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun/Raw_Reads
+# ADAPTSEQ=/fs/project/PAS0471/osu8900/Desktop/osu8900/Software/bbmap/resources/nextera.fa.gz
+cd /fs/project/PAS0471/osu8900/Mi-SeqRun2/Scripts
+bash illumina_adapter_rm.sh
+
+
+
+#Step 3: Merged_Pair_Ends
+#Edit the paths in 'merged_paires.sh', 
+raw_data=/fs/project/PAS0471/osu8900/Mi-SeqRun2/Illumina_Adapter_Removed
+working_dir=/fs/project/PAS0471/osu8900/Mi-SeqRun2/Merged_Reads
+rm -rf $working_dir
+mkdir $working_dir
+cd $raw_data
+
+#Files will have to be un-zip before merging
+gzip -d *
+
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -fastq_mergepairs *_R1.fastq -reverse *_R2.fastq -relabel @  -fastq_minovlen 20  -fastqout $working_dir/merged.fq 2>$working_dir/merged.stats
+
+#Run stats. Use stats scripts
+
+#Step 4: Quality filtering
+#Edit the paths in q_filtered_pairs.shg
+working_dir=/fs/project/PAS0471/osu8900/Mi-SeqRun2/Q-Filtered
+merged_data=/fs/project/PAS0471/osu8900/Mi-SeqRun2/Merged_Reads
+cd $merged_data
+rm -rf $working_dir
+mkdir $working_dir
+
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -fastq_filter  merged.fq  -fastq_maxee 1.0  -fastaout $working_dir/q-filtered.fasta -log  $working_dir/q-filtered.log
+
+
+
+
+#Run stats. Use stats scripts
+
+
+#Step 5 ITSx
+#make sure to select all organims in the analysis.
+#run following commands
+export PATH=/fs/project/PAS0471/osu8900/Software/ITSx_1.0.11:$PATH
+export PATH=/fs/project/PAS0471/osu8900/Software/hmmer-3.1b2-linux-intel-x86_64/binaries:$PATH
+
+ITSx -i q-filtered.fasta -o q-filtered.x  --reset T --cpu 25 --allow_reorder T --allow_single_domain 1e-1,0 --only_full T --save_raw T 
+
+
+grep -c ">" Oom.x.ITS1.fasta #to know how many sequences you got
+
+
+#OTU
+http://drive5.com/usearch/manual/ex_miseq_its.bash
+
+# Find unique read sequences and abundances
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -fastx_uniques /users/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun2/ITSx/q-filtered.x.ITS1.fasta -sizeout -relabel Uniq -fastaout ITS1uniques.fa
+
+# Run UPARSE algorithm to make 97% OTUs
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -cluster_otus /users/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun2/ITS1uniques.fa  -otus ITS1OTU_2.fa 
+
+# Run UNOISE algorithm to get denoised sequences (ZOTUs)
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -unoise3 /users/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun2/OTUTable/ITS1OTU_2.fa -zotus ITS1zotus_2.fa
+
+
+
+
+# Downstream analysis of OTU sequences & OTU table
+# Can do this for both OTUs and ZOTUs.
+
+
+# Make OTU table
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -otutab /users/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun2/ITSx/q-filtered.x.ITS1.fasta -otus ITS1zotus_2.fa -otutabout zotutab_Run2.txt 
+
+#Taxonomy- We used a costum database from Bakker (Oomycetes) and UNITE (fungal ITS db)
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -sintax ITS1zotus_2.fa  -db /users/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun2/Database/UNITE_Bakkerdb_mod.fasta -tabbedout Taxo_Run2modzotu.txt -strand both -sintax_cutoff 0.1 
+
+
+
+#Fixing the output file after taxonomy
+
+#This was the command used and then file was imported to Excel and fixed the file so that it did not have duplicates.
+sed 's/\+.*//g' Taxo_Run2modzotu.txt | sed 's/\-.*//g'| sed 's/[(][^)]*[)]//g'| sed 's/[a-z]\://g' >Taxo_Run2modzotu_2.csv
+
+ 
+
+
+
+
+
+#Extra codes:
+
+#(This code makes duplicates in the output file)
+ sed 's/\+.*//g' Taxo_Run2.txt | sed 's/\-.*//g' | sed 's/[(][^)]*[)]//g'| sed 's/[a-z]\://g'| sed 's/[;]size=//g' | sed 's/[;]/,/g' >Taxa_Run2_mod.csv
+
+#PhiX
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -filter_phix $working_dir/q-filtered.fasta -notmatchedfq filtered_reads.fq -alnout hits.txt
+
+
+#UNITE database
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -makeudb_sintax utax_reference_dataset_22.08.2016.fasta -output UNITE_ITS1.udb
+
+
+#Taxonomy
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -sintax ITSOzotus.fa  -db /users/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun/Qiime_Labels_Added_qla/utax_db-2.fasta -tabbedout ITSreads.utax -strand both -sintax_cutoff 0.8 
+
+# Alpha diversity
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -alpha_div otutab.txt -output alpha.txt
+
+# Rarefaction
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -alpha_div_rare otutab.txt -output alpha_rare.txt
+
+#Summary Taxonomy
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -sintax_summary ITSOTUUNITE.utax -otutabin ITS1OTU.fa -rank g -output genus_summary.txt
+
+
+# Normalize to 1k reads / sample. This becomes my OTUTable
+/users/PAS0471/osu8900/Desktop/osu8900/Software/usearch10.0.240_i86linux32 -otutab_norm /users/PAS0471/osu8900/Desktop/osu8900/Mi-SeqRun2/otutab_Run2.txt -sample_size 1000 -output normotutab_Run2.txt
+
