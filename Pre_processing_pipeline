@@ -4,20 +4,27 @@
 
 ### 1. Make a directory named Raw_Data
 mkdir /fs/project/PAS0471/osu8900/Mi-SeqRun2/Raw_Data
-# Assign download folder path to variable 'fastq_download_dir'-asigning a name to my long path to reduce the name length.
+
+### 2. Assign download folder path to the variable 'fastq_download_dir'. This will assign a name to my long path to reduce the path length.
+
 fastq_download_dir=/fs/project/PAS0471/osu8900/Mi-SeqRun2/180206_AnneDorrance_KrystelNavarro-amplicons-64594557
-# change the directory to 'fastq_download_dir'
+
+### 2. Change the directory to 'fastq_download_dir'
+
 cd $fastq_download_dir
-#move fastq files inside 'fastq_download_dir' to 'Raw_Data' folder
+
+### 3. Move fastq files inside 'fastq_download_dir' to 'Raw_Data' folder
+
 for i in */*/*;do echo  $i ../Raw_Data/;done
 for i in */*/*;do mv  $i ../Raw_Data/;done
 
-#Samples from the Run were relabeled with original sample labels
+### 4. Samples from the Run were relabeled with original sample labels. 
+
 for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R1_* ../Raw_Data/${samplename}_R1.fastq.gz;done
 
 for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R2_* ../Raw_Data/${samplename}_R2.fastq.gz;done
 
-#Run stats. Use stats scripts
+### 5. Run stats. Use stats scripts. 
 
 
 # Step 2: Remove Illumina barcodes from foward reads and reverse reads
