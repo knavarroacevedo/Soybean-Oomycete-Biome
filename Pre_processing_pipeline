@@ -18,13 +18,16 @@ cd $fastq_download_dir
 for i in */*/*;do echo  $i ../Raw_Data/;done
 for i in */*/*;do mv  $i ../Raw_Data/;done
 
-### E. Samples from the Run were relabeled with original sample labels. 
-
+### E. Samples from the Run were relabeled with original sample labels. Make sure to upload the filenames.txt that contains the legend of your samples and the legend from the sequencer.
+for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R1_* ../Raw_Data2/${samplename}_R1.fastq.gz;done
 for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R1_* ../Raw_Data/${samplename}_R1.fastq.gz;done
 
+
+for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R2_* ../Raw_Data2/${samplename}_R2.fastq.gz;done
 for i in $(cat filenames.txt); do samplename=$(echo $i | cut -f1 -d","); sampleID=$(echo $i | cut -f2 -d","); cp ${sampleID}_*_R2_* ../Raw_Data/${samplename}_R2.fastq.gz;done
 
-### F. Run stats. Use stats scripts. 
+### F. Run stats. Using FASTQC/MULTIFASTQC.
+
 
 
 # Step 2: Remove Illumina barcodes from foward reads and reverse reads
